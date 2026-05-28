@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>F-Rick Zero</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        body {
+            font-family: 'Press Start 2P', monospace;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            background-color: #0f111a;
+        }
+
+        /* Retro screen scanline filter */
+        .scanlines {
+            position: relative;
+            overflow: hidden;
+        }
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 10;
+            background-size: 100% 3px, 5px 100%;
+            pointer-events: none;
+        }
+
+        /* Screen glow and shadows to look like an LCD under a bezel */
+        .screen-bezel {
+            box-shadow: inset 0 10px 20px rgba(0,0,0,0.85), inset 0 -3px 8px rgba(255,255,255,0.08);
+        }
+
+        /* Console frame physical depth shadows */
+        .console-shadow {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(0,0,0,0.3);
+        }
+
+        /* Tactile Game Boy Buttons */
+        .gb-btn-active {
+            transition: transform 0.05s, box-shadow 0.05s;
+        }
+        .gb-btn-active:active {
+            transform: translateY(3px) scale(0.97);
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.6), 0 1px 2px rgba(255,255,255,0.1);
+        }
+
+        /* D-pad button active styles */
+        .dpad-active:active {
+            background-color: #374151 !important;
+            filter: brightness(1.2);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 overflow-hidden text-white">
+
+    <!-- Overall Device Shell: Clean Light Beige Retro Plastic -->
+    <div class="relative flex flex-col items-center w-full max-w-md p-5 bg-[#e4decf] rounded-3xl border-4 border-[#cfc8b7] console-shadow" style="height: 94vh; max-height: 860px; min-height: 640px;">
+        
+        <!-- Game Boy Top Bezel Text with Classic Gray Lines -->
+        <div class="w-full flex items-center justify-between px-4 mb-3">
+            <div class="h-1 bg-gray-400 flex-grow mr-3 rounded-full opacity-50"></div>
+            <span class="text-gray-600 text-[8px] tracking-[0.2em] font-bold whitespace-nowrap">◄ F-Rick Zero ►</span>
+            <div class="h-1 bg-gray-400 flex-grow ml-3 rounded-full opacity-50"></div>
+            <div class="flex items-center gap-1.5 ml-2">
+                <div class="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse border border-red-950 shadow-sm"></div>
+                <span class="text-gray-700 text-[7px] font-bold">POWER</span>
+            </div>
+        </div>
+
+        <!-- Dark Gray Bezel Screen Housing -->
+        <div class="relative w-full flex-grow flex flex-col bg-[#73757d] rounded-xl p-5 screen-bezel border-b-8 border-[#56585f] border-t-2 border-r-2 border-[#82848c]">
+            <!-- Classic Double Purple/Blue Accent Lines on Bezel -->
+            <div class="absolute top-2 left-6 right-6 h-1 flex justify-between opacity-70">
+                <div class="w-2/5 h-full bg-[#3b2e5c]"></div>
+                <div class="w-2/5 h-full bg-[#821e4a]"></div>
+            </div>
+
+            <div class="flex justify-between items-center mb-1.5 mt-1 text-[7px] text-gray-300 font-sans tracking-tight">
+                <span class="font-bold">DOT MATRIX WITH STEREO SOUND</span>
+                <span id="screen-palette-selector" class="cursor-pointer bg-gray-800 px-2 py-0.5 rounded text-green-400 hover:bg-gray-700 border border-gray-900">PALETTE: CLASSIC</span>
+            </div>
+
+            <!-- Virtual LCD Screen Wrapper -->
+            <div class="relative flex-grow w-full overflow-hidden rounded-md border-4 border-black bg-[#9bbc0f] scanlines shadow-inner" id="screen-container">
+                <!-- Canvas elements -->
+                <canvas id="gameCanvas" class="w-full h-full block image-render-pixelated"></canvas>
+                
+                <!-- On-Screen Menu Overlays -->
+                <div id="overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-85 p-4 text-center z-20">
+                    <h1 class="text-[10px] md:text-xs text-green-400 mb-1 leading-relaxed tracking-widest text-center" id="menu-title">PORTAL RACER</h1>
+                    <p class="text-[7px] text-yellow-400 mb-4" id="menu-subtitle">LOADED DIMENSION: C-137</p>
+
+                    <!-- Selection Buttons -->
+                    <div id="menu-buttons" class="flex flex-col gap-2 w-full max-w-xs">
+                        <button onclick="startGame('citadel')" class="bg-emerald-800 hover:bg-emerald-700 text-white py-1.5 px-3 text-[9px] rounded border border-white transition active:scale-95">
+                            CITADEL BYPASS
+                        </button>
+                        <button onclick="startGame('dimension35c')" class="bg-[#59228a] hover:bg-[#6c2da8] text-white py-1.5 px-3 text-[9px] rounded border border-white transition active:scale-95">
+                            DIMENSION 35-C
+                        </button>
+                        <button onclick="startGame('screamingSun')" class="bg-[#9c4c1a] hover:bg-[#b05821] text-white py-1.5 px-3 text-[9px] rounded border border-white transition active:scale-95">
+                            SCREAMING DESERT
+                        </button>
+                    </div>
+
+                    <div id="game-over-buttons" class="hidden flex flex-col gap-2 w-full max-w-xs">
+                        <button onclick="resetToMenu()" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 text-[9px] rounded border border-white transition">
+                            RETURN TO PORTAL
+                        </button>
+                    </div>
+
+                    <!-- Instructions / Control Summary -->
+                    <div class="mt-4 text-[6px] text-gray-400 leading-relaxed max-w-[280px]">
+                        STEER: LEFT / RIGHT D-PAD <br>
+                        A BUTTON (GAS) | B BUTTON (BOOST) <br>
+                        KEYBOARD: ARROWS + Z (GAS) + X (BOOST)
+                    </div>
+                </div>
+
+                <!-- HUD Overlay (in-game) -->
+                <div id="hud" class="hidden absolute inset-x-0 top-0 p-2 flex justify-between items-start pointer-events-none z-10 text-[8px] text-black font-bold">
+                    <div class="flex flex-col gap-0.5">
+                        <div id="hud-lap" class="bg-white/40 px-1 rounded">LAP: 1/3</div>
+                        <div id="hud-pos" class="bg-white/40 px-1 rounded">POS: 4/4</div>
+                        <div id="hud-time" class="bg-white/40 px-1 rounded">00:00</div>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                        <div class="flex items-center gap-1 bg-white/40 px-1 rounded">
+                            <span>SPD:</span>
+                            <span id="hud-speed" class="inline-block w-8 text-right font-mono">000</span>
+                        </div>
+                        <div class="flex flex-col items-end bg-white/40 p-1 rounded">
+                            <span class="text-[6px] tracking-tighter">PORTAL ENERGY</span>
+                            <div class="w-16 h-1.5 border border-black bg-gray-200 rounded overflow-hidden">
+                                <div id="hud-energy" class="h-full bg-emerald-700 w-full transition-all"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Splat Overlay / Dimensions Glitch Effect -->
+                <div id="glitch-screen" class="absolute inset-0 bg-[#39ff14] opacity-0 pointer-events-none z-30 transition-opacity duration-150"></div>
+                
+                <!-- Notification Banner -->
+                <div id="banner" class="absolute top-1/3 inset-x-0 bg-yellow-400 text-black text-[8px] text-center py-1 font-bold transform -rotate-2 scale-110 shadow-lg hidden z-30">
+                    LAP COMPLETE!
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Area (Game Boy Lower Half with Classic Accents) -->
+        <div class="w-full grid grid-cols-12 gap-2 mt-5 items-center px-1 flex-shrink-0">
+            <!-- Tactile D-Pad (Left Grid) -->
+            <div class="col-span-5 flex justify-center items-center">
+                <div class="relative w-28 h-28 bg-[#cfc8b7] rounded-full flex items-center justify-center shadow-md border border-[#c1bcae]">
+                    <div class="absolute w-24 h-24 bg-gray-900 rounded-full flex items-center justify-center shadow-inner">
+                        <!-- Up -->
+                        <button id="btn-up" class="dpad-active absolute top-0 w-8 h-10 bg-gray-800 rounded-t flex items-center justify-center border-b border-gray-700 shadow-sm" style="left: 32px;">
+                            <span class="text-gray-500 text-[8px] select-none">▲</span>
+                        </button>
+                        <!-- Left -->
+                        <button id="btn-left" class="dpad-active absolute left-0 w-10 h-8 bg-gray-800 rounded-l flex items-center justify-center border-r border-gray-700 shadow-sm" style="top: 32px;">
+                            <span class="text-gray-500 text-[8px] select-none">◀</span>
+                        </button>
+                        <!-- Center Anchor -->
+                        <div class="absolute w-8 h-8 bg-gray-800 z-10 rounded-sm">
+                            <div class="w-3 h-3 bg-gray-900 rounded-full m-2.5"></div>
+                        </div>
+                        <!-- Right -->
+                        <button id="btn-right" class="dpad-active absolute right-0 w-10 h-8 bg-gray-800 rounded-r flex items-center justify-center border-l border-gray-700 shadow-sm" style="top: 32px;">
+                            <span class="text-gray-500 text-[8px] select-none">▶</span>
+                        </button>
+                        <!-- Down -->
+                        <button id="btn-down" class="dpad-active absolute bottom-0 w-8 h-10 bg-gray-800 rounded-b flex items-center justify-center border-t border-gray-700 shadow-sm" style="left: 32px;">
+                            <span class="text-gray-500 text-[8px] select-none">▼</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Select/Start (Middle Grid - Classic Rubber Pill Buttons) -->
+            <div class="col-span-3 flex flex-col justify-center gap-5 pt-3">
+                <div class="flex flex-col items-center">
+                    <button id="btn-select" class="w-10 h-3 bg-gray-500 rounded-full rotate-[-28deg] shadow-md border border-gray-600 active:bg-gray-400 transition-colors"></button>
+                    <span class="text-[6px] text-gray-500 mt-2.5 uppercase tracking-wider font-sans font-bold">SELECT</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <button id="btn-start" class="w-10 h-3 bg-gray-500 rounded-full rotate-[-28deg] shadow-md border border-gray-600 active:bg-gray-400 transition-colors"></button>
+                    <span class="text-[6px] text-gray-500 mt-2.5 uppercase tracking-wider font-sans font-bold">START</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons A & B (Bordeaux Red / Wine Crimson) -->
+            <div class="col-span-4 flex justify-end gap-3.5 items-center pr-1.5">
+                <!-- Button B (Brake / Boost) -->
+                <div class="flex flex-col items-center">
+                    <button id="btn-b" class="gb-btn-active w-12 h-12 bg-[#800020] border-2 border-[#5c0017] rounded-full flex items-center justify-center text-[#ffccd5] text-xs font-bold shadow-[0_4px_0_#4a0010] transform translate-y-2">
+                        B
+                    </button>
+                    <span class="text-[6px] text-gray-600 mt-4.5 font-sans font-bold uppercase">BOOST</span>
+                </div>
+                <!-- Button A (Accelerate) -->
+                <div class="flex flex-col items-center">
+                    <button id="btn-a" class="gb-btn-active w-12 h-12 bg-[#800020] border-2 border-[#5c0017] rounded-full flex items-center justify-center text-[#ffccd5] text-xs font-bold shadow-[0_4px_0_#4a0010] transform -translate-y-1">
+                        A
+                    </button>
+                    <span class="text-[6px] text-gray-600 mt-1.5 font-sans font-bold uppercase">GAS</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Speaker Grille details bottom right -->
+        <div class="absolute bottom-4 right-8 flex gap-1.5 transform rotate-[-28deg] opacity-40">
+            <div class="w-1.5 h-7 bg-gray-400 rounded-full shadow-inner"></div>
+            <div class="w-1.5 h-7 bg-gray-400 rounded-full shadow-inner"></div>
+            <div class="w-1.5 h-7 bg-gray-400 rounded-full shadow-inner"></div>
+            <div class="w-1.5 h-7 bg-gray-400 rounded-full shadow-inner"></div>
+        </div>
+    </div>
+
+    <!-- AUDIO TOGGLE / DEBUG HELPER -->
+    <div class="mt-2 text-center text-[8px] text-gray-500 max-w-xs flex flex-col gap-1 font-sans">
+        <span>PRESS "S" TO TOGGLE RETRO CHIP MUSIC</span>
+        <span>DRIVE SAFELY THROUGH MULTIVERSE DRIFTING</span>
+    </div>
+
+    <script>
+        // --- MULTI-PALETTE CHANGER ---
+        const palettes = {
+            classic: { bg: '#9bbc0f', dark: '#0f380f', mid: '#306230', light: '#8bac0f' },
+            neon: { bg: '#120c1f', dark: '#ff007f', mid: '#39ff14', light: '#00ffff' },
+            sunset: { bg: '#3d1e42', dark: '#f05151', mid: '#e28f32', light: '#fae38c' },
+            monochrome: { bg: '#e0f8cf', dark: '#000000', mid: '#505050', light: '#a0a0a0' }
+        };
+        let currentPaletteKey = 'classic';
+        const paletteKeys = Object.keys(palettes);
+
+        document.getElementById('screen-palette-selector').addEventListener('click', () => {
+            const nextIdx = (paletteKeys.indexOf(currentPaletteKey) + 1) % paletteKeys.length;
+            currentPaletteKey = paletteKeys[nextIdx];
+            document.getElementById('screen-palette-selector').innerText = 'PALETTE: ' + currentPaletteKey.toUpperCase();
+            
+            // Apply background color to Screen container
+            const sc = document.getElementById('screen-container');
+            sc.style.backgroundColor = palettes[currentPaletteKey].bg;
+            if (currentPaletteKey === 'neon') {
+                sc.style.borderColor = palettes[currentPaletteKey].dark;
+            } else {
+                sc.style.borderColor = '#000000';
+            }
+        });
+
+        // --- RETRO SOUND SYNTHESIZER (Web Audio API) ---
+        class SynthManager {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+                this.musicInterval = null;
+                this.tempo = 140; // BPM
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            toggle() {
+                this.enabled = !this.enabled;
+                if (!this.enabled) {
+                    this.stopMusic();
+                } else {
+                    this.init();
+                    this.playTune();
+                }
+            }
+
+            playTone(freq, type, duration, vol = 0.12) {
+                if (!this.enabled || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) { /* Audio safety guard */ }
+            }
+
+            playEngine(speedRatio) {
+                if (!this.enabled || !this.ctx) return;
+                // Authentic low-pitched shifting rumble
+                const pitch = 35 + (speedRatio * 125);
+                this.playTone(pitch, 'sawtooth', 0.05, 0.05);
+            }
+
+            playCrash() {
+                this.playTone(85, 'triangle', 0.45, 0.25);
+                this.playTone(50, 'sawtooth', 0.35, 0.15);
+            }
+
+            playBoost() {
+                this.playTone(700, 'sine', 0.1, 0.12);
+                setTimeout(() => this.playTone(1000, 'sine', 0.1, 0.12), 60);
+                setTimeout(() => this.playTone(1400, 'sine', 0.15, 0.12), 120);
+            }
+
+            playCheckpoint() {
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => {
+                        this.playTone(freq, 'square', 0.12, 0.12);
+                    }, idx * 100);
+                });
+            }
+
+            playTune() {
+                if (this.musicInterval) clearInterval(this.musicInterval);
+                if (!this.enabled) return;
+                this.init();
+
+                const bassline = [
+                    110, 110, 130, 110, 146, 146, 130, 164,
+                    110, 110, 130, 110, 98, 98, 82, 73
+                ];
+                const leadLine = [
+                    440, 0, 523, 440, 587, 0, 523, 659,
+                    440, 0, 523, 440, 392, 349, 329, 293
+                ];
+                let beat = 0;
+
+                this.musicInterval = setInterval(() => {
+                    if (!this.enabled) return;
+                    const bassNote = bassline[beat % bassline.length];
+                    const leadNote = leadLine[beat % leadLine.length];
+
+                    if (bassNote > 0) {
+                        this.playTone(bassNote, 'sawtooth', 0.22, 0.04);
+                    }
+                    if (leadNote > 0 && Math.random() > 0.45) {
+                        this.playTone(leadNote, 'square', 0.14, 0.03);
+                    }
+                    beat++;
+                }, 210);
+            }
+
+            stopMusic() {
+                if (this.musicInterval) {
+                    clearInterval(this.musicInterval);
+                    this.musicInterval = null;
+                }
+            }
+        }
+
+        const audio = new SynthManager();
+
+        // Canvas & Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Target Game Boy Resolution
+        const SCREEN_W = 240;
+        const SCREEN_H = 160;
+        canvas.width = SCREEN_W;
+        canvas.height = SCREEN_H;
+
+        ctx.imageSmoothingEnabled = false;
+
+        // --- GAME STATE ---
+        let state = {
+            currentMenu: 'title', // 'title', 'racing', 'gameover'
+            trackId: 'citadel',
+            playerX: 0,           // position relative to road center (-1 to 1 is on road)
+            position: 0,          // distance along the track
+            speed: 0,             // current speed
+            maxSpeed: 120,        // normal top speed
+            accel: 1.6,
+            decel: 1.1,
+            breaking: 3.2,
+            boostActive: false,
+            boostTimer: 0,
+            energy: 100,          // life/energy bar
+            lap: 1,
+            maxLaps: 3,
+            lapTimes: [],
+            lapStartTime: 0,
+            raceStartTime: 0,
+            positionInRace: 4,
+            width: SCREEN_W,
+            height: SCREEN_H,
+            trackLength: null,
+            opponents: []
+        };
+
+        // --- LEVEL / TRACK DEFINITIONS ---
+        const TRACKS = {
+            citadel: {
+                name: "CITADEL BYPASS",
+                colorSky: '#11051a',
+                colorFloor: '#21102e',
+                colorFloorAlt: '#1a0924',
+                colorRoad: '#482a5c',
+                colorEdge: '#00ffcc',
+                colorLine: '#ffffff',
+                length: 1200,
+                segmentLength: 200,
+                build: () => {
+                    let segs = [];
+                    for (let i = 0; i < 80; i++) segs.push({ curve: 0, hill: 0 });
+                    for (let i = 0; i < 150; i++) segs.push({ curve: 1.5, hill: 0 });
+                    for (let i = 0; i < 100; i++) segs.push({ curve: 0, hill: 0 });
+                    for (let i = 0; i < 120; i++) segs.push({ curve: -2, hill: 1.5 });
+                    for (let i = 0; i < 120; i++) segs.push({ curve: 2, hill: -1.5 });
+                    for (let i = 0; i < 150; i++) segs.push({ curve: 0, hill: 0 });
+                    for (let i = 0; i < 180; i++) segs.push({ curve: -4, hill: 0 });
+                    for (let i = 0; i < 300; i++) segs.push({ curve: 0, hill: 0 });
+                    return segs;
+                },
+                sprites: [
+                    { name: 'crystal', count: 40, widthRatio: 1.4 },
+                    { name: 'morty', count: 12, widthRatio: 1.8 },
+                    { name: 'sun', count: 5, widthRatio: 2.8 },
+                    { name: 'portal', count: 8, widthRatio: 3.2 }
+                ]
+            },
+            dimension35c: {
+                name: "DIMENSION 35-C",
+                colorSky: '#021f14',
+                colorFloor: '#0b3d22',
+                colorFloorAlt: '#072b17',
+                colorRoad: '#1e633d',
+                colorEdge: '#39ff14',
+                colorLine: '#e0f8cf',
+                length: 1500,
+                segmentLength: 200,
+                build: () => {
+                    let segs = [];
+                    for (let i = 0; i < 100; i++) segs.push({ curve: 0, hill: 0 });
+                    for (let i = 0; i < 200; i++) segs.push({ curve: 1, hill: Math.sin(i / 10) * 3 });
+                    for (let i = 0; i < 300; i++) segs.push({ curve: -3, hill: 1 });
+                    for (let i = 0; i < 100; i++) segs.push({ curve: 0, hill: -1 });
+                    for (let i = 0; i < 300; i++) segs.push({ curve: Math.sin(i / 8) * 4, hill: 0 });
+                    for (let i = 0; i < 500; i++) segs.push({ curve: 0, hill: 0 });
+                    return segs;
+                },
+                sprites: [
+                    { name: 'megatree', count: 50, widthRatio: 2.0 },
+                    { name: 'crystal', count: 25, widthRatio: 1.1 },
+                    { name: 'plumbus', count: 15, widthRatio: 1.3 },
+                    { name: 'portal', count: 10, widthRatio: 3.5 }
+                ]
+            },
+            screamingSun: {
+                name: "SCREAMING DESERT",
+                colorSky: '#471c08',
+                colorFloor: '#7d3810',
+                colorFloorAlt: '#592506',
+                colorRoad: '#a65421',
+                colorEdge: '#ffea00',
+                colorLine: '#ffffff',
+                length: 1600,
+                segmentLength: 200,
+                build: () => {
+                    let segs = [];
+                    for (let i = 0; i < 100; i++) segs.push({ curve: 0, hill: 0 });
+                    for (let i = 0; i < 400; i++) segs.push({ curve: 2.5, hill: 1 });
+                    for (let i = 0; i < 300; i++) segs.push({ curve: -2.5, hill: -1 });
+                    for (let i = 0; i < 300; i++) segs.push({ curve: 0, hill: Math.sin(i / 4) * 5 });
+                    for (let i = 0; i < 200; i++) segs.push({ curve: 4.5, hill: 0 });
+                    for (let i = 0; i < 300; i++) segs.push({ curve: 0, hill: 0 });
+                    return segs;
+                },
+                sprites: [
+                    { name: 'sun', count: 35, widthRatio: 3.5 },
+                    { name: 'crystal', count: 20, widthRatio: 1.4 },
+                    { name: 'meeseeks', count: 15, widthRatio: 1.5 },
+                    { name: 'portal', count: 5, widthRatio: 3.2 }
+                ]
+            }
+        };
+
+        let activeTrack = [];
+        let trackDecorations = []; 
+
+        // --- VECTOR SPRITE RENDERERS ---
+        const drawProceduralSprite = (ctx, type, x, y, sizeW, sizeH) => {
+            const pal = palettes[currentPaletteKey];
+            
+            ctx.save();
+            ctx.translate(x, y);
+
+            if (type === 'ship_player') {
+                // RICK AND MORTY UFO-CAR / SPACE CRUISER (With Rick and Morty inside)
+                
+                // 1. Back/Under Thrusters
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(-sizeW * 0.22, sizeH * 0.15, sizeW * 0.12, sizeH * 0.2);
+                ctx.fillRect(sizeW * 0.1, sizeH * 0.15, sizeW * 0.12, sizeH * 0.2);
+
+                // Animated Thrust Plumes (Green portal flames)
+                if (state.speed > 5) {
+                    ctx.fillStyle = (Math.random() > 0.5) ? '#39ff14' : '#00ffcc';
+                    ctx.beginPath();
+                    ctx.moveTo(-sizeW * 0.22, sizeH * 0.35);
+                    ctx.lineTo(-sizeW * 0.16, sizeH * (0.6 + Math.random() * 0.3));
+                    ctx.lineTo(-sizeW * 0.1, sizeH * 0.35);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.moveTo(sizeW * 0.1, sizeH * 0.35);
+                    ctx.lineTo(sizeW * 0.16, sizeH * (0.6 + Math.random() * 0.3));
+                    ctx.lineTo(sizeW * 0.22, sizeH * 0.35);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                // 2. Main Saucer Disk Body
+                ctx.fillStyle = '#94a3b8'; // Light silver gray
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.ellipse(0, sizeH * 0.08, sizeW * 0.45, sizeH * 0.18, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Inner saucer panel line
+                ctx.strokeStyle = '#475569';
+                ctx.beginPath();
+                ctx.ellipse(0, sizeH * 0.1, sizeW * 0.32, sizeH * 0.1, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 3. Sensor Dome Lights (Wingtips)
+                ctx.fillStyle = '#ef4444'; // Red light left
+                ctx.beginPath();
+                ctx.arc(-sizeW * 0.38, sizeH * 0.06, sizeW * 0.05, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#3b82f6'; // Blue light right
+                ctx.beginPath();
+                ctx.arc(sizeW * 0.38, sizeH * 0.06, sizeW * 0.05, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // 4. Clear Glass Cockpit Canopy Dome
+                ctx.fillStyle = 'rgba(186, 230, 253, 0.7)'; // Translucent sky blue
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.arc(0, -sizeH * 0.05, sizeW * 0.22, Math.PI, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // 5. Rick and Morty Characters Sitting Inside
+                ctx.save();
+                // Clip drawing to cockpit window
+                ctx.beginPath();
+                ctx.arc(0, -sizeH * 0.05, sizeW * 0.21, Math.PI, 0);
+                ctx.closePath();
+                ctx.clip();
+
+                // --- Rick (Left Driver Seat) ---
+                // Rick's spikey cyan hair
+                ctx.fillStyle = '#a5f3fc'; 
+                ctx.beginPath();
+                ctx.arc(-sizeW * 0.09, -sizeH * 0.1, sizeW * 0.09, 0, Math.PI * 2);
+                ctx.fill();
+                // Spike details
+                ctx.fillRect(-sizeW * 0.17, -sizeH * 0.18, sizeW * 0.05, sizeH * 0.1);
+                ctx.fillRect(-sizeW * 0.06, -sizeH * 0.20, sizeW * 0.05, sizeH * 0.1);
+                // Rick's face
+                ctx.fillStyle = '#fef08a';
+                ctx.beginPath();
+                ctx.arc(-sizeW * 0.09, -sizeH * 0.06, sizeW * 0.06, 0, Math.PI * 2);
+                ctx.fill();
+                // White lab coat
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-sizeW * 0.13, -sizeH * 0.02, sizeW * 0.08, sizeH * 0.1);
+
+                // --- Morty (Right Passenger Seat) ---
+                // Morty's round brown hair
+                ctx.fillStyle = '#78350f'; 
+                ctx.beginPath();
+                ctx.arc(sizeW * 0.08, -sizeH * 0.08, sizeW * 0.07, 0, Math.PI * 2);
+                ctx.fill();
+                // Morty's face
+                ctx.fillStyle = '#fef08a';
+                ctx.beginPath();
+                ctx.arc(sizeW * 0.08, -sizeH * 0.05, sizeW * 0.055, 0, Math.PI * 2);
+                ctx.fill();
+                // Morty's classic yellow shirt
+                ctx.fillStyle = '#facc15';
+                ctx.fillRect(sizeW * 0.04, -sizeH * 0.01, sizeW * 0.08, sizeH * 0.08);
+
+                ctx.restore();
+
+            } else if (type === 'ship_opponent_morty') {
+                // MORTY'S ALIEN SHIP
+                ctx.fillStyle = '#f97316';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1.2;
+
+                ctx.beginPath();
+                ctx.arc(0, 0, sizeW * 0.32, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#e0f2fe';
+                ctx.beginPath();
+                ctx.arc(0, -sizeH * 0.08, sizeW * 0.16, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Thrust
+                ctx.fillStyle = '#f43f5e';
+                ctx.fillRect(-sizeW * 0.1, sizeH * 0.22, sizeW * 0.2, sizeH * 0.15);
+
+            } else if (type === 'ship_opponent_meeseeks') {
+                // BLUE GLIDER SHAPE
+                ctx.fillStyle = '#38bdf8';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1.2;
+
+                ctx.beginPath();
+                ctx.moveTo(0, -sizeH * 0.35);
+                ctx.lineTo(sizeW * 0.38, sizeH * 0.25);
+                ctx.lineTo(0, sizeH * 0.05);
+                ctx.lineTo(-sizeW * 0.38, sizeH * 0.25);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#f97316';
+                ctx.fillRect(-sizeW * 0.04, -sizeH * 0.25, sizeW * 0.08, sizeH * 0.08);
+
+            } else if (type === 'crystal') {
+                ctx.fillStyle = pal.mid;
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, -sizeH * 0.5);
+                ctx.lineTo(sizeW * 0.32, 0);
+                ctx.lineTo(0, sizeH * 0.5);
+                ctx.lineTo(-sizeW * 0.32, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = pal.light;
+                ctx.beginPath();
+                ctx.moveTo(0, -sizeH * 0.5);
+                ctx.lineTo(0, sizeH * 0.5);
+                ctx.stroke();
+
+            } else if (type === 'megatree') {
+                ctx.fillStyle = pal.dark;
+                ctx.fillRect(-sizeW * 0.08, -sizeH * 0.2, sizeW * 0.16, sizeH * 0.7);
+
+                ctx.fillStyle = pal.mid;
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+
+                // Segmented branches
+                ctx.beginPath();
+                ctx.ellipse(0, -sizeH * 0.1, sizeW * 0.32, sizeH * 0.14, 0, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+
+                ctx.fillStyle = pal.light;
+                ctx.beginPath();
+                ctx.ellipse(0, -sizeH * 0.3, sizeW * 0.38, sizeH * 0.16, 0, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+
+                ctx.fillStyle = pal.mid;
+                ctx.beginPath();
+                ctx.arc(0, -sizeH * 0.45, sizeW * 0.22, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+
+            } else if (type === 'portal') {
+                const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, sizeW * 0.5);
+                grad.addColorStop(0, '#a3e635');
+                grad.addColorStop(0.5, '#22c55e');
+                grad.addColorStop(1, '#15803d');
+                
+                ctx.fillStyle = grad;
+                ctx.strokeStyle = '#39ff14';
+                ctx.lineWidth = 1.8;
+
+                ctx.beginPath();
+                ctx.ellipse(0, 0, sizeW * 0.5, sizeH * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = '#052e16';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, sizeW * 0.28, sizeH * 0.18, Math.sin(Date.now() / 150), 0, Math.PI * 2);
+                ctx.stroke();
+
+            } else if (type === 'sun') {
+                ctx.fillStyle = '#facc15';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1.2;
+
+                const flares = 12;
+                ctx.beginPath();
+                for (let i = 0; i < flares; i++) {
+                    const angle = (i / flares) * Math.PI * 2;
+                    const len = (i % 2 === 0) ? sizeW * 0.48 : sizeW * 0.36;
+                    const tx = Math.cos(angle) * len;
+                    const ty = Math.sin(angle) * len;
+                    if (i === 0) ctx.moveTo(tx, ty);
+                    else ctx.lineTo(tx, ty);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#eab308';
+                ctx.beginPath();
+                ctx.arc(0, 0, sizeW * 0.28, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#451a03';
+                ctx.beginPath();
+                ctx.ellipse(0, sizeH * 0.08, sizeW * 0.16, sizeH * 0.1, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Eyes
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-sizeW * 0.08, -sizeH * 0.08, 3, 3);
+                ctx.fillRect(sizeW * 0.05, -sizeH * 0.08, 3, 3);
+
+            } else if (type === 'plumbus') {
+                ctx.fillStyle = '#f472b6';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+
+                ctx.fillRect(-sizeW * 0.04, -sizeH * 0.4, sizeW * 0.08, sizeH * 0.65);
+                
+                ctx.beginPath();
+                ctx.arc(0, sizeH * 0.12, sizeW * 0.22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#ec4899';
+                ctx.beginPath();
+                ctx.moveTo(-sizeW * 0.22, -sizeH * 0.1);
+                ctx.lineTo(-sizeW * 0.35, -sizeH * 0.25);
+                ctx.lineTo(-sizeW * 0.12, -sizeH * 0.25);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+            } else if (type === 'meeseeks') {
+                ctx.fillStyle = '#60a5fa';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+
+                ctx.beginPath();
+                ctx.ellipse(0, -sizeH * 0.28, sizeW * 0.18, sizeH * 0.14, 0, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+
+                ctx.fillRect(-sizeW * 0.04, -sizeH * 0.14, sizeW * 0.08, sizeH * 0.38);
+
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(-2, -sizeH * 0.3, 1.5, 1.5);
+                ctx.fillRect(2, -sizeH * 0.3, 1.5, 1.5);
+                ctx.fillRect(-2, -sizeH * 0.23, 4, 2);
+            }
+
+            ctx.restore();
+        };
+
+        // --- TRACK GENERATION ---
+        function loadTrack(trackKey) {
+            state.trackId = trackKey;
+            const config = TRACKS[trackKey];
+            activeTrack = config.build();
+            state.trackLength = activeTrack.length;
+
+            trackDecorations = [];
+            config.sprites.forEach(spec => {
+                for (let i = 0; i < spec.count; i++) {
+                    const segIdx = Math.floor(Math.random() * (state.trackLength - 100)) + 50;
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    const offset = side * (1.6 + Math.random() * 4.2);
+                    trackDecorations.push({
+                        segmentIndex: segIdx,
+                        type: spec.name,
+                        offsetX: offset,
+                        widthRatio: spec.widthRatio,
+                        heightRatio: spec.widthRatio * 1.1
+                    });
+                }
+            });
+
+            // Finish Line portal arch
+            trackDecorations.push({
+                segmentIndex: 10,
+                type: 'portal',
+                offsetX: 0,
+                widthRatio: 5.5,
+                heightRatio: 4.2
+            });
+
+            // Competitor racer bots
+            state.opponents = [
+                {
+                    id: 'morty',
+                    name: 'MORTY',
+                    sprite: 'ship_opponent_morty',
+                    position: 450,
+                    playerX: -0.45,
+                    speed: 76,
+                    maxSpeed: 82,
+                    finished: false,
+                    rank: 2
+                },
+                {
+                    id: 'summer',
+                    name: 'SUMMER',
+                    sprite: 'ship_opponent_meeseeks',
+                    position: 850,
+                    playerX: 0.55,
+                    speed: 79,
+                    maxSpeed: 86,
+                    finished: false,
+                    rank: 1
+                },
+                {
+                    id: 'jerry',
+                    name: 'JERRY',
+                    sprite: 'ship_opponent_morty',
+                    position: 250,
+                    playerX: 0.15,
+                    speed: 56,
+                    maxSpeed: 64,
+                    finished: false,
+                    rank: 3
+                }
+            ];
+        }
+
+        // --- SYSTEM ENGINE LOOP CONTROLLER ---
+        let lastTime = 0;
+        let keysPressed = {};
+
+        window.addEventListener('keydown', e => {
+            keysPressed[e.key.toLowerCase()] = true;
+            if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key)) {
+                e.preventDefault();
+            }
+            if (e.key.toLowerCase() === 's') {
+                audio.toggle();
+            }
+        });
+        window.addEventListener('keyup', e => {
+            keysPressed[e.key.toLowerCase()] = false;
+        });
+
+        // Setup Virtual Controller Action Listeners
+        const btnA = document.getElementById('btn-a');
+        const btnB = document.getElementById('btn-b');
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnUp = document.getElementById('btn-up');
+        const btnDown = document.getElementById('btn-down');
+        const btnStart = document.getElementById('btn-start');
+        const btnSelect = document.getElementById('btn-select');
+
+        let touchGas = false;
+        let touchBoost = false;
+        let touchLeft = false;
+        let touchRight = false;
+
+        function registerTouchButton(element, onPress, onRelease) {
+            const pressHandler = (e) => {
+                e.preventDefault();
+                onPress();
+            };
+            const releaseHandler = (e) => {
+                e.preventDefault();
+                onRelease();
+            };
+            
+            element.addEventListener('mousedown', pressHandler);
+            element.addEventListener('mouseup', releaseHandler);
+            element.addEventListener('mouseleave', releaseHandler);
+            
+            element.addEventListener('touchstart', pressHandler, {passive: false});
+            element.addEventListener('touchend', releaseHandler, {passive: false});
+        }
+
+        registerTouchButton(btnA, () => { touchGas = true; audio.init(); }, () => { touchGas = false; });
+        registerTouchButton(btnB, () => { touchBoost = true; }, () => { touchBoost = false; });
+        registerTouchButton(btnLeft, () => { touchLeft = true; }, () => { touchLeft = false; });
+        registerTouchButton(btnRight, () => { touchRight = true; }, () => { touchRight = false; });
+
+        btnStart.addEventListener('click', () => {
+            if (state.currentMenu === 'title') {
+                startGame('citadel');
+            } else if (state.currentMenu === 'gameover') {
+                resetToMenu();
+            }
+        });
+        btnSelect.addEventListener('click', () => {
+            document.getElementById('screen-palette-selector').click();
+        });
+
+        // --- SYSTEM ENGINE INITIALIZERS ---
+        function startGame(trackKey) {
+            audio.init();
+            loadTrack(trackKey);
+            
+            state.currentMenu = 'racing';
+            state.playerX = 0;
+            state.position = 0;
+            state.speed = 0;
+            state.energy = 100;
+            state.lap = 1;
+            state.lapTimes = [];
+            state.lapStartTime = Date.now();
+            state.raceStartTime = Date.now();
+            
+            document.getElementById('overlay').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+
+            audio.playTune();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetToMenu() {
+            state.currentMenu = 'title';
+            document.getElementById('menu-title').innerText = "DIMENSION DRIFT";
+            document.getElementById('menu-subtitle').innerText = "READY RACER ONE?";
+            document.getElementById('overlay').classList.remove('hidden');
+            document.getElementById('menu-buttons').classList.remove('hidden');
+            document.getElementById('game-over-buttons').classList.add('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            audio.stopMusic();
+        }
+
+        function triggerGlitchEffect() {
+            const glitch = document.getElementById('glitch-screen');
+            glitch.style.opacity = '0.75';
+            setTimeout(() => {
+                glitch.style.opacity = '0';
+            }, 120);
+        }
+
+        function showBannerNotification(text) {
+            const banner = document.getElementById('banner');
+            banner.innerText = text;
+            banner.classList.remove('hidden');
+            setTimeout(() => {
+                banner.classList.add('hidden');
+            }, 1800);
+        }
+
+        // --- GAME LOGIC UPDATES ---
+        function updatePhysics(dt) {
+            const trackConfig = TRACKS[state.trackId];
+            const currentSegmentIndex = Math.floor(state.position / trackConfig.segmentLength) % activeTrack.length;
+            const currentSegment = activeTrack[currentSegmentIndex];
+
+            const accelerating = keysPressed['z'] || keysPressed['arrowup'] || touchGas;
+            const braking = keysPressed['x'] || keysPressed['arrowdown'] || touchBoost; 
+            const steerLeft = keysPressed['arrowleft'] || touchLeft;
+            const steerRight = keysPressed['arrowright'] || touchRight;
+
+            if (accelerating) {
+                let targetMax = state.maxSpeed;
+                if (state.boostActive) {
+                    targetMax = state.maxSpeed * 1.5;
+                }
+                if (state.speed < targetMax) {
+                    state.speed += state.accel;
+                } else {
+                    state.speed -= state.decel;
+                }
+            } else if (braking) {
+                if (state.energy > 15 && !state.boostActive) {
+                    state.boostActive = true;
+                    state.boostTimer = 65; 
+                    state.energy -= 15;
+                    audio.playBoost();
+                    showBannerNotification("PORTAL BOOST GO!");
+                } else {
+                    state.speed -= state.breaking;
+                }
+            } else {
+                state.speed -= state.decel;
+            }
+
+            if (state.speed < 0) state.speed = 0;
+
+            if (state.boostActive) {
+                state.boostTimer--;
+                if (state.boostTimer <= 0) {
+                    state.boostActive = false;
+                }
+            }
+
+            const speedFactor = state.speed / state.maxSpeed;
+            if (steerLeft) {
+                state.playerX -= 0.045 * speedFactor;
+            }
+            if (steerRight) {
+                state.playerX += 0.045 * speedFactor;
+            }
+
+            if (currentSegment && Math.abs(currentSegment.curve) > 0.1) {
+                const centrifugalFactor = 0.00035 * currentSegment.curve * (state.speed * state.speed);
+                state.playerX -= centrifugalFactor;
+            }
+
+            if (state.playerX < -2) state.playerX = -2;
+            if (state.playerX > 2) state.playerX = 2;
+
+            if (Math.abs(state.playerX) > 1.0) {
+                if (state.speed > 25) {
+                    state.speed -= 2.8;
+                    if (Math.random() > 0.7) {
+                        triggerGlitchEffect();
+                        audio.playTone(85, 'sine', 0.04, 0.04);
+                    }
+                }
+            }
+
+            state.position += state.speed;
+
+            const fullTrackLengthPx = activeTrack.length * trackConfig.segmentLength;
+            if (state.position >= fullTrackLengthPx) {
+                state.position -= fullTrackLengthPx;
+                
+                const lapTime = (Date.now() - state.lapStartTime) / 1000;
+                state.lapTimes.push(lapTime);
+                state.lapStartTime = Date.now();
+                
+                audio.playCheckpoint();
+                
+                if (state.lap < state.maxLaps) {
+                    state.lap++;
+                    showBannerNotification(`LAP ${state.lap} COMPLETE!`);
+                    state.energy = Math.min(100, state.energy + 35);
+                } else {
+                    endRace(true);
+                    return;
+                }
+            }
+
+            // AI racers loop
+            state.opponents.forEach(ai => {
+                ai.position += ai.speed;
+                if (ai.position >= fullTrackLengthPx) {
+                    ai.position -= fullTrackLengthPx;
+                    if (state.lap >= state.maxLaps) {
+                        ai.finished = true;
+                    }
+                }
+
+                ai.playerX += (Math.random() - 0.5) * 0.12;
+                ai.playerX = Math.max(-0.85, Math.min(0.85, ai.playerX));
+
+                const distanceToAI = Math.abs(state.position - ai.position);
+                if (distanceToAI < 55 && Math.abs(state.playerX - ai.playerX) < 0.28) {
+                    audio.playCrash();
+                    triggerGlitchEffect();
+                    
+                    if (state.position > ai.position) {
+                        state.speed += 8;
+                        ai.speed -= 12;
+                    } else {
+                        state.speed -= 18;
+                        ai.speed += 8;
+                    }
+                    state.energy -= 12;
+                    if (state.energy < 0) state.energy = 0;
+                }
+            });
+
+            // Calculate Position Rank
+            let aheadCount = 0;
+            state.opponents.forEach(ai => {
+                if (ai.position > state.position) {
+                    aheadCount++;
+                }
+            });
+            state.positionInRace = aheadCount + 1;
+
+            if (Math.random() > 0.45) {
+                audio.playEngine(state.speed / state.maxSpeed);
+            }
+        }
+
+        function endRace(completedSuccessfully) {
+            state.currentMenu = 'gameover';
+            audio.stopMusic();
+
+            const overlay = document.getElementById('overlay');
+            const title = document.getElementById('menu-title');
+            const subtitle = document.getElementById('menu-subtitle');
+            const menuBtn = document.getElementById('menu-buttons');
+            const gameOverBtn = document.getElementById('game-over-buttons');
+
+            overlay.classList.remove('hidden');
+            menuBtn.classList.add('hidden');
+            gameOverBtn.classList.remove('hidden');
+
+            if (completedSuccessfully) {
+                audio.playCheckpoint();
+                title.innerText = "RACE COMPLETED";
+                const rankText = state.positionInRace === 1 ? "1st PLACE! GLORIOUS RICK!" : `${state.positionInRace}th PLACE! JERRY-TIER SPEED!`;
+                
+                let timeStr = "";
+                state.lapTimes.forEach((t, i) => {
+                    timeStr += `L${i+1}: ${t.toFixed(1)}s `;
+                });
+                subtitle.innerHTML = `${rankText}<br><br><span class="text-[7px] text-green-300">${timeStr}</span>`;
+            } else {
+                audio.playCrash();
+                title.innerText = "CRASHED OUT";
+                subtitle.innerText = "YOUR SPACESHIP TOOK TOO MUCH DAMAGE!";
+            }
+        }
+
+        // --- PSEUDO 3D ENGINE DRAWING ---
+        function renderPortalRacer3D() {
+            const trackConfig = TRACKS[state.trackId];
+            const pal = palettes[currentPaletteKey];
+
+            // 1. SKY & DISTANT HORIZON
+            ctx.fillStyle = trackConfig.colorSky;
+            ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+
+            const horizonScroll = Math.floor(state.position * 0.05) % SCREEN_W;
+            
+            // Neon Moon details
+            ctx.fillStyle = pal.light;
+            ctx.beginPath();
+            ctx.arc(SCREEN_W * 0.25 - (horizonScroll * 0.15) % SCREEN_W, 22, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Silhouette skyline peaks
+            ctx.fillStyle = trackConfig.colorFloorAlt;
+            for (let x = 0; x < SCREEN_W + 40; x += 40) {
+                const drawX = (x - horizonScroll) % (SCREEN_W + 40);
+                ctx.beginPath();
+                ctx.moveTo(drawX, 60);
+                ctx.lineTo(drawX + 20, 38);
+                ctx.lineTo(drawX + 40, 60);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.fillStyle = trackConfig.colorFloor;
+            ctx.fillRect(0, 60, SCREEN_W, SCREEN_H - 60);
+
+            // 2. PROJECTED PSEUDO 3D ROAD
+            const viewDepth = 75; 
+            const cameraHeight = 1100; 
+            const roadWidth = 240; 
+
+            let cumulativeCurve = 0;
+            let cumulativeHill = 0;
+
+            const projectedLines = [];
+
+            const startSegmentIndex = Math.floor(state.position / trackConfig.segmentLength);
+            const playerPercent = (state.position % trackConfig.segmentLength) / trackConfig.segmentLength;
+
+            for (let i = 0; i < viewDepth; i++) {
+                const segIdx = (startSegmentIndex + i) % activeTrack.length;
+                const segment = activeTrack[segIdx];
+
+                cumulativeCurve += segment.curve;
+                cumulativeHill += segment.hill;
+
+                const depthValue = i - playerPercent;
+                if (depthValue <= 0) continue;
+
+                const scale = cameraHeight / (depthValue * trackConfig.segmentLength * 0.15);
+                const screenY = Math.floor(60 + (SCREEN_H - 60) / (depthValue * 0.32)); 
+                
+                if (screenY >= SCREEN_H || screenY < 60) continue;
+
+                const screenX = Math.floor(SCREEN_W * 0.5 + (cumulativeCurve * scale * 1.5) - (state.playerX * roadWidth * scale));
+
+                projectedLines[screenY] = {
+                    x: screenX,
+                    scale: scale,
+                    segmentIndex: segIdx
+                };
+
+                const scanWidth = Math.floor(roadWidth * scale);
+                const stripePattern = (Math.floor(segIdx / 3) % 2 === 0);
+
+                ctx.fillStyle = stripePattern ? trackConfig.colorFloor : trackConfig.colorFloorAlt;
+                ctx.fillRect(0, screenY, SCREEN_W, 1);
+
+                ctx.fillStyle = trackConfig.colorRoad;
+                ctx.fillRect(screenX - scanWidth, screenY, scanWidth * 2, 1);
+
+                ctx.fillStyle = stripePattern ? trackConfig.colorEdge : pal.dark;
+                ctx.fillRect(screenX - scanWidth - Math.floor(5 * scale), screenY, Math.floor(5 * scale), 1);
+                ctx.fillRect(screenX + scanWidth, screenY, Math.floor(5 * scale), 1);
+
+                if (stripePattern) {
+                    ctx.fillStyle = trackConfig.colorLine;
+                    ctx.fillRect(screenX - Math.floor(1.5 * scale), screenY, Math.max(1, Math.floor(3 * scale)), 1);
+                }
+            }
+
+            // 3. DRAW SCATTERED 3D SPRITES
+            const activeSprites = [];
+
+            trackDecorations.forEach(obj => {
+                const relativeIdx = obj.segmentIndex - startSegmentIndex;
+                
+                let resolvedRelativeIdx = relativeIdx;
+                if (relativeIdx < -activeTrack.length/2) resolvedRelativeIdx += activeTrack.length;
+                if (relativeIdx > activeTrack.length/2) resolvedRelativeIdx -= activeTrack.length;
+
+                if (resolvedRelativeIdx > 0 && resolvedRelativeIdx < viewDepth) {
+                    activeSprites.push({
+                        obj: obj,
+                        depth: resolvedRelativeIdx - playerPercent
+                    });
+                }
+            });
+
+            state.opponents.forEach(ai => {
+                const relativeIdx = Math.floor(ai.position / trackConfig.segmentLength) - startSegmentIndex;
+                let resolvedRelativeIdx = relativeIdx;
+                if (relativeIdx < -activeTrack.length/2) resolvedRelativeIdx += activeTrack.length;
+                if (relativeIdx > activeTrack.length/2) resolvedRelativeIdx -= activeTrack.length;
+
+                if (resolvedRelativeIdx > 0 && resolvedRelativeIdx < viewDepth) {
+                    activeSprites.push({
+                        obj: {
+                            type: ai.sprite,
+                            offsetX: ai.playerX,
+                            widthRatio: 2.2,
+                            heightRatio: 2.0,
+                            isAI: true,
+                            aiName: ai.name
+                        },
+                        depth: resolvedRelativeIdx
+                    });
+                }
+            });
+
+            activeSprites.sort((a, b) => b.depth - a.depth);
+
+            activeSprites.forEach(spriteItem => {
+                const depth = spriteItem.depth;
+                const scale = cameraHeight / (depth * trackConfig.segmentLength * 0.15);
+                const screenY = Math.floor(60 + (SCREEN_H - 60) / (depth * 0.32));
+
+                if (screenY >= SCREEN_H || screenY < 60) return;
+
+                const line = projectedLines[screenY];
+                if (!line) return;
+
+                const spriteW = Math.floor(spriteItem.obj.widthRatio * scale * 12);
+                const spriteH = Math.floor(spriteItem.obj.heightRatio * scale * 12);
+
+                const spriteX = Math.floor(line.x + (spriteItem.obj.offsetX * roadWidth * scale));
+
+                drawProceduralSprite(ctx, spriteItem.obj.type, spriteX, screenY - spriteH/2, spriteW, spriteH);
+
+                if (spriteItem.obj.isAI && scale > 0.45) {
+                    ctx.fillStyle = pal.dark;
+                    ctx.font = '5px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(spriteItem.obj.aiName, spriteX, screenY - spriteH - 2);
+                }
+            });
+
+            // 4. DRAW PLAYER SPACESHIP (Rick's Signature UFO Space Cruiser)
+            const speedBounce = Math.sin(Date.now() / 90) * (1 + (state.speed * 0.04));
+            const playerW = 38;
+            const playerH = 28;
+            const playerScreenX = SCREEN_W * 0.5;
+            const playerScreenY = SCREEN_H * 0.85 + speedBounce;
+
+            drawProceduralSprite(ctx, 'ship_player', playerScreenX, playerScreenY, playerW, playerH);
+        }
+
+        // --- HUD UPDATE HANDLERS ---
+        function updateHUD() {
+            const speedMph = Math.floor(state.speed * 2.2);
+            document.getElementById('hud-speed').innerText = speedMph.toString().padStart(3, '0');
+
+            document.getElementById('hud-energy').style.width = state.energy + '%';
+            
+            if (state.energy < 25) {
+                document.getElementById('hud-energy').className = 'h-full bg-red-600 transition-all';
+            } else {
+                document.getElementById('hud-energy').className = 'h-full bg-emerald-600 transition-all';
+            }
+
+            document.getElementById('hud-lap').innerText = `LAP: ${state.lap}/${state.maxLaps}`;
+
+            const posSuffix = ["", "st", "nd", "rd", "th"];
+            const rankStr = state.positionInRace + posSuffix[Math.min(4, state.positionInRace)];
+            document.getElementById('hud-pos').innerText = `POS: ${rankStr}`;
+
+            const elapsed = Math.max(0, (Date.now() - state.raceStartTime) / 1000);
+            const m = Math.floor(elapsed / 60);
+            const s = Math.floor(elapsed % 60);
+            const ms = Math.floor((elapsed % 1) * 100);
+            document.getElementById('hud-time').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+        }
+
+        // --- CORE ANIMATION ENGINE TICK ---
+        function gameLoop(timestamp) {
+            if (state.currentMenu !== 'racing') return;
+
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            updatePhysics(dt);
+            renderPortalRacer3D();
+            updateHUD();
+
+            if (state.energy <= 0) {
+                endRace(false);
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        renderPortalRacer3D();
+    </script>
+</body>
+</html>
